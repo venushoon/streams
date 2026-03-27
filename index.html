@@ -3,312 +3,345 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>말랑말랑 맞춤법 대항전</title>
-    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
-    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <title>에듀 스트림스 (Edu Streams) - 숫자 오름차순 게임</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
-    <link href="https://fonts.googleapis.com/css2?family=Nanum+Gothic:wght@400;700;800&display=swap" rel="stylesheet">
-    
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nanum+Round:wght@400;700;800&display=swap');
+        
+        :root {
+            --bg-color: #e0e5ec;
+            --shadow-light: #ffffff;
+            --shadow-dark: #a3b1c6;
+        }
+
         body {
-            font-family: 'Nanum Gothic', sans-serif;
+            font-family: 'Nanum Round', sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            overflow: hidden;
             touch-action: manipulation;
             user-select: none;
-            -webkit-user-select: none;
-            overflow: hidden;
-            margin: 0;
-            padding: 0;
         }
+
         /* 뉴모피즘 스타일 */
-        .neu-flat {
-            background: #e0e5ec;
-            box-shadow: 9px 9px 16px rgb(163,177,198,0.6), -9px -9px 16px rgba(255,255,255, 0.5);
+        .neu-card {
+            background: var(--bg-color);
+            border-radius: 20px;
+            box-shadow: 9px 9px 16px var(--shadow-dark), -9px -9px 16px var(--shadow-light);
         }
-        .neu-pressed {
-            background: #e0e5ec;
-            box-shadow: inset 6px 6px 12px #b8bec5, inset -6px -6px 12px #ffffff;
-        }
+
         .neu-btn {
-            background: #e0e5ec;
-            box-shadow: 6px 6px 12px #b8bec5, -6px -6px 12px #ffffff;
+            background: var(--bg-color);
+            border-radius: 12px;
+            box-shadow: 5px 5px 10px var(--shadow-dark), -5px -5px 10px var(--shadow-light);
             transition: all 0.2s ease;
         }
+
         .neu-btn:active {
-            box-shadow: inset 4px 4px 8px #b8bec5, inset -4px -4px 8px #ffffff;
+            box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
             transform: scale(0.98);
         }
-        /* 다크모드 변수 */
-        .dark body { background: #2d3436; color: white; }
-        .dark .neu-flat { background: #2d3436; box-shadow: 5px 5px 10px #23282a, -5px -5px 10px #374042; }
-        .dark .neu-btn { background: #2d3436; box-shadow: 5px 5px 10px #23282a, -5px -5px 10px #374042; color: white; }
-        
-        /* 문제 박스 그라데이션 */
-        .question-box {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+
+        .neu-inset {
+            box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
         }
 
-        .answer-btn {
-            border: 3px solid transparent;
+        /* 격자 레이아웃 최적화 */
+        .game-grid {
+            display: grid;
+            gap: 10px;
+            width: 100%;
+            height: 100%;
+            padding: 20px;
         }
 
-        /* 레이아웃 최적화 */
-        .game-container {
-            height: 100vh;
+        /* 숫자 타일 스타일 */
+        .stream-slot {
+            aspect-ratio: 1/1;
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 1.2rem;
+            cursor: pointer;
+        }
+
+        .stream-slot.filled {
+            color: #3b82f6;
+            background: #f0f4f8;
+        }
+
+        /* 하단 버튼 고정 */
+        .floating-controls {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+            z-index: 100;
         }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
     <script type="text/babel">
         const { useState, useEffect, useCallback } = React;
 
-        // 맞춤법 데이터
-        const QUIZ_DATA = [
-            { q: "어떤 게 맞을까요?", options: ["안 돼", "안 돼어"], ans: 0, desc: "'안 돼'는 '안 되어'의 줄임말인 '안 돼'로 쓰는 것이 맞습니다." },
-            { q: "친구에게 줄 선물을?", options: ["통틀어", "통털어"], ans: 0, desc: "'온갖 것을 다 한데 묶다'는 의미는 '통틀어'가 표준어입니다." },
-            { q: "숙제를 다?", options: ["했대요", "했데요"], ans: 0, desc: "남이 말한 내용을 전달할 때는 '-대요'를 사용합니다." },
-            { q: "기분이 정말?", options: ["어떡해", "어떻게"], ans: 0, desc: "'어떡해'는 '어떻게 해'의 줄임말이며, 여기서는 상태를 묻는 '어떻게'가 어울릴 수 있으나 문맥상 끝맺음은 '어떡해'입니다." },
-            { q: "자리에?", options: ["앉아라", "안자라"], ans: 0, desc: "앉다의 어간 '앉-'에 어미 '-아라'가 붙어 '앉아라'가 됩니다." },
-            { q: "떡볶이가 너무?", options: ["맵다", "맵따"], ans: 0, desc: "소리 나는 대로 쓰지 않고 원형인 '맵다'로 적습니다." },
-            { q: "오늘 날씨가?", options: ["희한하다", "희안하다"], ans: 0, desc: "매우 드물고 기이하다는 뜻의 단어는 '희한(稀罕)하다'입니다." },
-            { q: "우유를?", options: ["들이켰다", "들이켰다"], ans: 0, desc: "마구 마시는 것은 '들이켜다'이므로 '들이켰다'가 맞습니다." },
-            { q: "이것은?", options: ["내 거야", "내 거야"], ans: 0, desc: "'거'는 의존명사 '것'의 구어체로 띄어 쓰는 것이 원칙입니다." },
-            { q: "어제 본 영화는?", options: ["재밌었어", "재미있었어"], ans: 1, desc: "둘 다 가능하나 표준어 원형은 '재미있었어'입니다." }
-        ];
+        // 스트림스 점수표 데이터
+        const SCORE_TABLE = {
+            1: 0, 2: 1, 3: 3, 4: 5, 5: 7, 6: 9, 7: 11, 8: 15, 9: 20, 10: 25,
+            11: 30, 12: 35, 13: 40, 14: 50, 15: 60, 16: 70, 17: 80, 18: 90, 19: 100, 20: 300
+        };
 
         const App = () => {
-            const [view, setView] = useState('MAIN'); // MAIN, LOBBY, COUNTDOWN, PLAY, RESULT
-            const [mode, setMode] = useState(1); // 1, 2, 3, 4인
-            const [qCount, setQCount] = useState(10);
-            const [isDark, setIsDark] = useState(false);
-            const [players, setPlayers] = useState([]);
-            const [currentQuizIdx, setCurrentQuizIdx] = useState(0);
+            const [gameState, setGameState] = useState('HOME'); // HOME, READY, PLAYING, RESULT
+            const [playerCount, setPlayerCount] = useState(1);
+            const [maxTurns, setMaxTurns] = useState(20);
+            const [currentTurn, setCurrentTurn] = useState(0);
+            const [drawnNumbers, setDrawnNumbers] = useState([]);
+            const [currentNumber, setCurrentNumber] = useState(null);
+            const [boards, setBoards] = useState([]);
             const [countdown, setCountdown] = useState(3);
-            const [globalFeedback, setGlobalFeedback] = useState(null); // {correct: bool, desc: string, userAns: string, correctAns: string}
-            const [wrongAnswers, setWrongAnswers] = useState([]);
+            const [winner, setWinner] = useState(null);
 
-            // 게임 초기화
-            const startGame = () => {
-                const initialPlayers = Array.from({ length: mode }, (_, i) => ({
-                    id: i,
-                    score: 0,
-                    finished: false
-                }));
-                setPlayers(initialPlayers);
-                setWrongAnswers([]);
-                setCurrentQuizIdx(0);
-                setView('COUNTDOWN');
+            // 숫자 주머니 생성 (1~10: 1개씩, 11~19: 2개씩, 20~30: 1개씩, 조커: 1개)
+            const createDeck = () => {
+                let deck = [];
+                for (let i = 1; i <= 10; i++) deck.push(i);
+                for (let i = 11; i <= 19; i++) { deck.push(i); deck.push(i); }
+                for (let i = 20; i <= 30; i++) deck.push(i);
+                deck.push("★"); // 조커
+                return deck.sort(() => Math.random() - 0.5);
+            };
+
+            const [deck, setDeck] = useState([]);
+
+            // 초기화
+            const initGame = (players, turns) => {
+                setPlayerCount(players);
+                setMaxTurns(turns);
+                setBoards(Array(players).fill(null).map(() => Array(turns).fill(null)));
+                setDeck(createDeck());
+                setGameState('READY');
+                setCountdown(3);
             };
 
             // 카운트다운 로직
             useEffect(() => {
-                if (view === 'COUNTDOWN') {
+                if (gameState === 'READY') {
                     if (countdown > 0) {
                         const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
                         return () => clearTimeout(timer);
                     } else {
-                        setView('PLAY');
-                        setCountdown(3);
+                        setGameState('PLAYING');
+                        drawNumber();
                     }
                 }
-            }, [view, countdown]);
+            }, [gameState, countdown]);
 
-            // 정답 선택 처리
-            const handleAnswer = (pIdx, optIdx) => {
-                if (globalFeedback) return; // 피드백 중 클릭 방지
+            // 숫자 뽑기
+            const drawNumber = () => {
+                if (currentTurn >= maxTurns) {
+                    calculateFinalScore();
+                    return;
+                }
+                const newDeck = [...deck];
+                const num = newDeck.pop();
+                setDeck(newDeck);
+                setCurrentNumber(num);
+                setDrawnNumbers(prev => [...prev, num]);
+                setCurrentTurn(prev => prev + 1);
+            };
 
-                const currentQuiz = QUIZ_DATA[currentQuizIdx % QUIZ_DATA.length];
-                const isCorrect = optIdx === currentQuiz.ans;
+            // 숫자 배치
+            const placeNumber = (pIdx, sIdx) => {
+                if (boards[pIdx][sIdx] !== null) return;
+                
+                const newBoards = [...boards];
+                newBoards[pIdx][sIdx] = currentNumber;
+                setBoards(newBoards);
 
-                if (isCorrect) {
-                    const newPlayers = [...players];
-                    newPlayers[pIdx].score += 1;
-                    setPlayers(newPlayers);
-                    
-                    if (currentQuizIdx + 1 >= qCount) {
-                        setView('RESULT');
+                // 모든 플레이어가 현재 턴의 숫자를 배치했는지 확인
+                const allPlaced = newBoards.every(board => 
+                    board.filter(val => val !== null).length === currentTurn
+                );
+
+                if (allPlaced) {
+                    if (currentTurn < maxTurns) {
+                        drawNumber();
                     } else {
-                        setCurrentQuizIdx(prev => prev + 1);
+                        calculateFinalScore();
                     }
-                } else {
-                    // 오답 발생 시 팝업 피드백 (모두에게)
-                    if (mode === 1) {
-                        setWrongAnswers(prev => [...prev, { ...currentQuiz, userSel: currentQuiz.options[optIdx] }]);
-                    }
-                    setGlobalFeedback({
-                        isCorrect: false,
-                        desc: currentQuiz.desc,
-                        userAns: currentQuiz.options[optIdx],
-                        correctAns: currentQuiz.options[currentQuiz.ans]
-                    });
                 }
             };
 
-            const closeFeedback = () => {
-                setGlobalFeedback(null);
-                if (currentQuizIdx + 1 >= qCount) {
-                    setView('RESULT');
-                } else {
-                    setCurrentQuizIdx(prev => prev + 1);
+            // 점수 계산 로직
+            const calculateScore = (board) => {
+                let totalScore = 0;
+                let currentStream = 1;
+                
+                for (let i = 0; i < board.length - 1; i++) {
+                    const curr = board[i] === "★" ? -1 : board[i];
+                    const next = board[i+1] === "★" ? 99 : board[i+1];
+
+                    // 조커는 무조건 흐름을 이어가므로 논리적 처리 필요하나 
+                    // 간단히 앞뒤 관계를 숫자로 치환하여 체크
+                    if (board[i+1] === "★" || board[i] === "★" || board[i] <= board[i+1]) {
+                        currentStream++;
+                    } else {
+                        totalScore += SCORE_TABLE[currentStream] || 0;
+                        currentStream = 1;
+                    }
                 }
+                totalScore += SCORE_TABLE[currentStream] || 0;
+                return totalScore;
             };
 
-            // 메인 화면
-            if (view === 'MAIN') {
-                return (
-                    <div className={`game-container items-center justify-center space-y-8 ${isDark ? 'dark' : ''} bg-[#e0e5ec]`}>
-                        <h1 className="text-4xl font-extrabold text-[#4a5568] animate__animated animate__bounceIn">✏️ 맞춤법 대항전</h1>
-                        <div className="neu-flat p-8 rounded-3xl w-80 space-y-6">
-                            <div>
-                                <p className="text-center font-bold mb-3">인원 선택</p>
-                                <div className="grid grid-cols-2 gap-3">
-                                    {[1, 2, 3, 4].map(n => (
-                                        <button key={n} onClick={() => setMode(n)} 
-                                            className={`py-2 rounded-xl neu-btn font-bold ${mode === n ? 'neu-pressed text-blue-600' : ''}`}>
-                                            {n}인용
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <div>
-                                <p className="text-center font-bold mb-3">문제 수</p>
-                                <div className="flex justify-between gap-2">
-                                    {[10, 20, 30].map(c => (
-                                        <button key={c} onClick={() => setQCount(c)} 
-                                            className={`flex-1 py-2 rounded-xl neu-btn font-bold ${qCount === c ? 'neu-pressed text-blue-600' : ''}`}>
-                                            {c}문항
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                            <button onClick={startGame} className="w-full py-4 bg-blue-500 text-white rounded-2xl font-bold shadow-lg hover:bg-blue-600 transition">
-                                게임 시작!
-                            </button>
-                        </div>
-                        <FloatingControls isDark={isDark} setIsDark={setIsDark} onHome={() => setView('MAIN')} />
-                    </div>
-                );
-            }
+            const calculateFinalScore = () => {
+                const scores = boards.map(b => calculateScore(b));
+                setWinner(scores);
+                setGameState('RESULT');
+            };
 
-            // 카운트다운 화면
-            if (view === 'COUNTDOWN') {
-                return (
-                    <div className="game-container items-center justify-center bg-[#e0e5ec]">
-                        <div className="text-9xl font-black text-blue-500 animate__animated animate__zoomIn">
-                            {countdown === 0 ? "GO!" : countdown}
-                        </div>
-                    </div>
-                );
-            }
+            // 홈으로
+            const goHome = () => setGameState('HOME');
 
-            // 결과 화면
-            if (view === 'RESULT') {
-                const isPerfect = players.every(p => p.score === qCount);
+            // --- 컴포넌트: 홈 화면 ---
+            if (gameState === 'HOME') {
                 return (
-                    <div className="game-container items-center justify-center bg-[#e0e5ec] p-4 overflow-y-auto">
-                        {isPerfect && <div className="fixed inset-0 pointer-events-none z-50 animate__animated animate__fadeIn">🎉</div>}
-                        <div className="neu-flat p-8 rounded-3xl max-w-2xl w-full text-center space-y-6 my-auto">
-                            <h2 className="text-3xl font-bold">게임 종료!</h2>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                {players.map(p => (
-                                    <div key={p.id} className="neu-btn p-4 rounded-2xl">
-                                        <p className="font-bold">{mode === 1 ? '나' : `플레이어 ${p.id + 1}`}</p>
-                                        <p className="text-2xl text-blue-600">{p.score} / {qCount}</p>
-                                    </div>
-                                ))}
-                            </div>
+                    <div className="h-screen flex flex-col items-center justify-center p-6 animate__animated animate__fadeIn">
+                        <div className="neu-card p-10 text-center max-w-2xl w-full">
+                            <h1 className="text-5xl font-extrabold mb-4 text-blue-600">에듀 스트림스</h1>
+                            <p className="text-gray-600 mb-8">숫자를 오름차순으로 배치하여 가장 긴 줄을 만드세요!</p>
                             
-                            {mode === 1 && wrongAnswers.length > 0 && (
-                                <div className="text-left mt-4">
-                                    <h3 className="font-bold text-red-500 mb-2">📒 오답 노트</h3>
-                                    <div className="max-height-[200px] overflow-y-auto space-y-2">
-                                        {wrongAnswers.map((item, idx) => (
-                                            <div key={idx} className="p-3 bg-white rounded-lg text-sm shadow-sm border-l-4 border-red-400">
-                                                <p><strong>문제:</strong> {item.q}</p>
-                                                <p className="text-red-500">내가 쓴 답: {item.userSel}</p>
-                                                <p className="text-blue-600">정답: {item.options[item.ans]}</p>
-                                            </div>
+                            <div className="grid grid-cols-1 gap-6 mb-10">
+                                <div className="space-y-3">
+                                    <p className="font-bold text-lg">인원 선택</p>
+                                    <div className="flex justify-center gap-4">
+                                        {[1, 2, 3, 4].map(n => (
+                                            <button key={n} onClick={() => setPlayerCount(n)}
+                                                className={`w-16 h-16 neu-btn font-bold text-xl ${playerCount === n ? 'text-blue-500 neu-inset' : ''}`}>
+                                                {n}명
+                                            </button>
                                         ))}
                                     </div>
                                 </div>
-                            )}
-
-                            <button onClick={() => setView('MAIN')} className="w-full py-4 bg-gray-700 text-white rounded-2xl font-bold">
-                                처음으로 돌아가기
-                            </button>
-                        </div>
-                    </div>
-                );
-            }
-
-            // 게임 플레이 화면 (2~4인 대응 유연 레이아웃)
-            const currentQuiz = QUIZ_DATA[currentQuizIdx % QUIZ_DATA.length];
-            
-            return (
-                <div className={`game-container ${isDark ? 'dark' : ''} bg-[#e0e5ec] relative`}>
-                    <div className={`grid h-full w-full ${mode === 1 ? 'grid-cols-1' : mode === 2 ? 'grid-rows-2' : 'grid-cols-2 grid-rows-2'}`}>
-                        {players.map((p, i) => (
-                            <div key={p.id} className={`relative flex flex-col items-center justify-center p-4 border-gray-300 ${mode > 1 ? 'border' : ''}`}>
-                                <div className="absolute top-2 left-4 font-bold text-gray-500">P{i+1} | {p.score}점</div>
-                                <div className="w-full max-w-md space-y-4">
-                                    <div className="question-box p-6 rounded-2xl shadow-xl text-center text-xl font-bold animate__animated animate__fadeIn">
-                                        Q. {currentQuiz.q}
-                                    </div>
-                                    <div className="grid grid-cols-1 gap-4">
-                                        {currentQuiz.options.map((opt, optIdx) => (
-                                            <button key={optIdx} 
-                                                onClick={() => handleAnswer(i, optIdx)}
-                                                className="neu-btn py-6 rounded-2xl text-2xl font-bold active:scale-95 transition-transform">
-                                                {opt}
+                                
+                                <div className="space-y-3">
+                                    <p className="font-bold text-lg">문제 수 (난이도)</p>
+                                    <div className="flex justify-center gap-4">
+                                        {[10, 20].map(n => (
+                                            <button key={n} onClick={() => setMaxTurns(n)}
+                                                className={`px-8 py-4 neu-btn font-bold ${maxTurns === n ? 'text-blue-500 neu-inset' : ''}`}>
+                                                {n}칸
                                             </button>
                                         ))}
                                     </div>
                                 </div>
                             </div>
+
+                            <button onClick={() => initGame(playerCount, maxTurns)}
+                                className="w-full py-5 bg-blue-500 text-white rounded-2xl text-2xl font-black shadow-lg hover:bg-blue-600 transition-all">
+                                게임 시작하기
+                            </button>
+                        </div>
+                    </div>
+                );
+            }
+
+            // --- 컴포넌트: 준비 화면 ---
+            if (gameState === 'READY') {
+                return (
+                    <div className="h-screen flex items-center justify-center">
+                        <h1 className="text-9xl font-black text-blue-500 animate__animated animate__zoomIn">
+                            {countdown}
+                        </h1>
+                    </div>
+                );
+            }
+
+            // --- 컴포넌트: 게임 플레이 ---
+            return (
+                <div className="h-screen w-full relative flex flex-col overflow-hidden">
+                    {/* 상단 현재 숫자 대시보드 */}
+                    <div className="h-1/5 flex items-center justify-center p-4">
+                        <div className="neu-card px-10 py-4 flex items-center gap-8 animate__animated animate__bounceInDown">
+                            <div className="text-center">
+                                <p className="text-sm text-gray-500 font-bold">TURN</p>
+                                <p className="text-2xl font-black">{currentTurn} / {maxTurns}</p>
+                            </div>
+                            <div className="w-24 h-24 neu-inset rounded-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-blue-600 shadow-inner">
+                                <span className="text-4xl text-white font-black">{currentNumber}</span>
+                            </div>
+                            <div className="text-left">
+                                <p className="text-sm text-gray-500 font-bold">NEXT NUMBER</p>
+                                <p className="text-lg font-bold text-blue-600">숫자를 칸에 배치하세요!</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* 플레이어 보드 영역 */}
+                    <div className={`h-4/5 grid ${playerCount > 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-4 p-4 pb-20`}>
+                        {boards.map((board, pIdx) => (
+                            <div key={pIdx} className="neu-card p-4 flex flex-col relative overflow-hidden">
+                                <div className="flex justify-between items-center mb-2">
+                                    <span className="font-bold text-blue-500">Player {pIdx + 1}</span>
+                                    <span className="text-xs text-gray-400">오름차순 연결 시 점수 UP!</span>
+                                </div>
+                                <div className="grid grid-cols-5 sm:grid-cols-10 gap-2 flex-grow">
+                                    {board.map((cell, sIdx) => (
+                                        <div 
+                                            key={sIdx}
+                                            onClick={() => placeNumber(pIdx, sIdx)}
+                                            className={`neu-btn stream-slot animate__animated ${cell ? 'neu-inset text-blue-600 animate__pulse' : 'hover:bg-blue-50'}`}
+                                        >
+                                            {cell}
+                                        </div>
+                                    ))}
+                                </div>
+                                {board.filter(v => v !== null).length === currentTurn && (
+                                    <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[1px]">
+                                        <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg">대기 중...</span>
+                                    </div>
+                                )}
+                            </div>
                         ))}
                     </div>
 
-                    {/* 공통 피드백 팝업 (모든 모드 공유) */}
-                    {globalFeedback && (
-                        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-[100] p-6 animate__animated animate__fadeIn">
-                            <div className="neu-flat p-8 rounded-3xl max-w-lg w-full text-center space-y-6">
-                                <div className="text-6xl mb-4">❌</div>
-                                <h2 className="text-2xl font-bold text-red-500 italic">아쉬워요!</h2>
-                                <div className="bg-white p-4 rounded-xl text-left space-y-2 text-gray-800">
-                                    <p>🤔 선택한 답: <span className="text-red-500 line-through">{globalFeedback.userAns}</span></p>
-                                    <p>✅ 올바른 답: <span className="text-blue-600 font-bold">{globalFeedback.correctAns}</span></p>
-                                    <hr/>
-                                    <p className="text-sm leading-relaxed">{globalFeedback.desc}</p>
+                    {/* 결과 레이어 */}
+                    {gameState === 'RESULT' && (
+                        <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-6">
+                            <div className="neu-card max-w-xl w-full p-8 text-center animate__animated animate__jackInTheBox bg-white">
+                                <h2 className="text-4xl font-black mb-6 text-blue-600">게임 종료!</h2>
+                                <div className="space-y-4 mb-8">
+                                    {winner.map((score, idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-4 neu-inset rounded-xl">
+                                            <span className="text-xl font-bold">플레이어 {idx + 1}</span>
+                                            <span className="text-3xl font-black text-blue-600">{score}점</span>
+                                        </div>
+                                    ))}
                                 </div>
-                                <button onClick={closeFeedback} className="w-full py-4 bg-blue-500 text-white rounded-2xl font-bold text-xl shadow-lg">
-                                    이해했어요!
+                                <button onClick={goHome} className="w-full py-4 bg-blue-500 text-white rounded-xl text-xl font-bold">
+                                    다시 하기
                                 </button>
                             </div>
                         </div>
                     )}
 
-                    <FloatingControls isDark={isDark} setIsDark={setIsDark} onHome={() => { if(confirm('게임을 중단하고 홈으로 갈까요?')) setView('MAIN') }} />
+                    {/* 플로팅 컨트롤 */}
+                    <div className="floating-controls">
+                        <button onClick={goHome} className="w-12 h-12 neu-btn flex items-center justify-center text-xl" title="홈으로">🏠</button>
+                        <button onClick={() => window.location.reload()} className="w-12 h-12 neu-btn flex items-center justify-center text-xl" title="새로고침">🔄</button>
+                    </div>
                 </div>
             );
         };
-
-        // 하단 플로팅 컨트롤 컴포넌트
-        const FloatingControls = ({ isDark, setIsDark, onHome }) => (
-            <div className="fixed bottom-4 right-4 flex gap-3 z-50">
-                <button onClick={() => setIsDark(!isDark)} className="p-3 rounded-full neu-btn text-xl shadow-lg">
-                    {isDark ? '☀️' : '🌙'}
-                </button>
-                <button onClick={onHome} className="p-3 rounded-full neu-btn text-xl shadow-lg">
-                    🏠
-                </button>
-            </div>
-        );
 
         const root = ReactDOM.createRoot(document.getElementById('root'));
         root.render(<App />);
