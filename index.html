@@ -57,22 +57,23 @@
             scrollbar-width: none;
         }
 
-        /* 숫자 타일 스타일 (처음의 크고 시원한 사이즈로 복구) */
+        /* 숫자 타일 스타일 (처음 크기 유지 + 화면 짤림 방지 최적화) */
         .stream-slot {
             aspect-ratio: 1/1;
+            max-height: 12vh; /* 타일이 과도하게 커지는 것만 방어하여 스크롤 없앰 */
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 800;
-            font-size: 1.2rem;
+            font-size: 1.3rem; /* 시원한 폰트 크기 복구 */
             cursor: pointer;
         }
 
-        /* 하단 버튼 고정 */
+        /* 하단 플로팅 버튼 */
         .floating-controls {
             position: fixed;
-            bottom: 20px;
-            right: 20px;
+            bottom: 15px;
+            right: 15px;
             display: flex;
             gap: 10px;
             z-index: 100;
@@ -214,7 +215,7 @@
                     const num = newDeck.pop();
                     setCurrentNumber(num);
                     setDrawnNumbers(prev => [...prev, num]);
-                    if (currentTurn > 1) playSound('next'); // 효과음 재생
+                    if (currentTurn > 1) playSound('next');
                     return newDeck;
                 });
             };
@@ -222,7 +223,7 @@
             const placeNumber = (pIdx, sIdx) => {
                 if (boards[pIdx][sIdx] !== null) return;
                 
-                playSound('click'); // 배치 효과음 재생
+                playSound('click');
 
                 setBoards(prevBoards => {
                     const newBoards = [...prevBoards];
@@ -256,7 +257,6 @@
                     }
 
                     const lastVal = currentStream[currentStream.length - 1];
-                    // 조커이거나 오름차순일 경우 연결
                     if (lastVal === "★" || curr === "★" || lastVal <= curr) {
                         currentStream.push(curr);
                     } else {
@@ -276,7 +276,7 @@
                 const results = boards.map(b => calculateDetails(b));
                 setFinalScores(results);
                 setGameState('RESULT');
-                playSound('win'); // 종료 효과음 재생
+                playSound('win');
             };
 
             const goHome = () => {
@@ -379,30 +379,31 @@
 
             return (
                 <div className="h-screen w-full relative flex flex-col overflow-hidden">
-                    <div className="h-1/5 flex items-center justify-center p-4">
-                        <div className="neu-card px-10 py-4 flex items-center gap-8 animate__animated animate__bounceInDown">
+                    {/* 상단 대시보드 크기 및 여백 최적화 (여백 축소로 스크롤 방지) */}
+                    <div className="flex-none flex items-center justify-center pt-3 pb-2 px-4">
+                        <div className="neu-card px-8 py-3 flex items-center gap-6 animate__animated animate__bounceInDown">
                             <div className="text-center">
-                                <p className="text-sm text-gray-500 font-bold">TURN</p>
-                                <p className="text-2xl font-black">{currentTurn} / {maxTurns}</p>
+                                <p className="text-xs text-gray-500 font-bold">TURN</p>
+                                <p className="text-xl font-black">{currentTurn} / {maxTurns}</p>
                             </div>
-                            <div className={`w-24 h-24 neu-inset rounded-full flex items-center justify-center ${currentNumber === '★' ? 'joker-tile' : 'bg-gradient-to-br from-blue-400 to-blue-600'} shadow-inner`}>
+                            <div className={`w-20 h-20 neu-inset rounded-full flex items-center justify-center ${currentNumber === '★' ? 'joker-tile' : 'bg-gradient-to-br from-blue-400 to-blue-600'} shadow-inner`}>
                                 <span className="text-4xl text-white font-black">{currentNumber}</span>
                             </div>
                             <div className="text-left">
-                                <p className="text-sm text-gray-500 font-bold">NEXT NUMBER</p>
-                                <p className="text-lg font-bold text-blue-600">숫자를 칸에 배치하세요!</p>
+                                <p className="text-xs text-gray-500 font-bold">NEXT NUMBER</p>
+                                <p className="text-base font-bold text-blue-600">숫자를 배치하세요!</p>
                             </div>
                         </div>
                     </div>
 
-                    {/* 보드 영역 스크롤 기능 추가 (화면 짤림 방지) */}
-                    <div className="flex-grow overflow-y-auto no-scrollbar p-4 pb-20">
-                        <div className={`grid ${playerCount > 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-6 max-w-7xl mx-auto`}>
+                    {/* 보드 영역 (여백 축소 및 Flex 비율 조정으로 2인 모드 최적화) */}
+                    <div className="flex-grow overflow-y-auto no-scrollbar px-4 pb-16 flex flex-col justify-center">
+                        <div className={`w-full max-w-7xl mx-auto grid grid-cols-1 gap-4`}>
                             {boards.map((board, pIdx) => (
-                                <div key={pIdx} className="neu-card p-5 flex flex-col relative animate__animated animate__fadeInUp">
-                                    <div className="flex justify-between items-center mb-3">
+                                <div key={pIdx} className="neu-card px-5 py-3 flex flex-col relative animate__animated animate__fadeInUp">
+                                    <div className="flex justify-between items-center mb-2">
                                         <span className="font-extrabold text-blue-500 text-lg">Player {pIdx + 1}</span>
-                                        <span className="text-sm font-bold text-gray-400">오름차순 연결 시 점수 UP!</span>
+                                        <span className="text-xs font-bold text-gray-400">오름차순 연결 시 점수 UP!</span>
                                     </div>
                                     <div className="grid grid-cols-5 sm:grid-cols-10 gap-2">
                                         {board.map((cell, sIdx) => (
@@ -463,7 +464,7 @@
                     )}
 
                     <div className="floating-controls">
-                        <button onClick={goHome} className="w-14 h-14 neu-btn flex items-center justify-center text-2xl" title="홈으로">🏠</button>
+                        <button onClick={goHome} className="w-12 h-12 neu-btn flex items-center justify-center text-xl" title="홈으로">🏠</button>
                     </div>
                 </div>
             );
