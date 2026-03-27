@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>에듀 스트림스 (Edu Streams) - 숫자 오름차순 게임</title>
+    <title>에듀 스트림스 (Edu Streams) - 수정된 버전</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/animate.css/4.1.1/animate.min.css"/>
     <style>
@@ -24,7 +24,7 @@
             user-select: none;
         }
 
-        /* 뉴모피즘 스타일 */
+        /* 뉴모피즘 스타일 기본 */
         .neu-card {
             background: var(--bg-color);
             border-radius: 20px;
@@ -47,6 +47,15 @@
             box-shadow: inset 5px 5px 10px var(--shadow-dark), inset -5px -5px 10px var(--shadow-light);
         }
 
+        /* 스크롤바 숨기기 (팝업용) */
+        .no-scrollbar::-webkit-scrollbar {
+            display: none;
+        }
+        .no-scrollbar {
+            -ms-overflow-style: none;  /* IE and Edge */
+            scrollbar-width: none;  /* Firefox */
+        }
+
         /* 격자 레이아웃 최적화 */
         .game-grid {
             display: grid;
@@ -67,11 +76,6 @@
             cursor: pointer;
         }
 
-        .stream-slot.filled {
-            color: #3b82f6;
-            background: #f0f4f8;
-        }
-
         /* 하단 버튼 고정 */
         .floating-controls {
             position: fixed;
@@ -80,6 +84,13 @@
             display: flex;
             gap: 10px;
             z-index: 100;
+        }
+
+        /* 조커 타일 스타일 */
+        .joker-tile {
+            background: linear-gradient(135deg, #ffed4a 0%, #ff9800 100%);
+            color: white !important;
+            border: none;
         }
     </style>
 </head>
@@ -91,7 +102,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
     <script type="text/babel">
-        const { useState, useEffect, useCallback } = React;
+        const { useState, useEffect, useCallback, useRef } = React;
 
         // 스트림스 점수표 데이터
         const SCORE_TABLE = {
@@ -108,28 +119,39 @@
             const [currentNumber, setCurrentNumber] = useState(null);
             const [boards, setBoards] = useState([]);
             const [countdown, setCountdown] = useState(3);
-            const [winner, setWinner] = useState(null);
+            const [finalScores, setFinalScores] = useState([]);
+            const [deck, setDeck] = useState([]);
+            const [showHowToPopup, setShowHowToPopup] = useState(false); // 게임 방법 팝업 상태
+
+            // 게임 리셋 함수 (버그 해결 핵심)
+            const resetGameStates = useCallback(() => {
+                setCurrentTurn(0);
+                setDrawnNumbers([]);
+                setCurrentNumber(null);
+                setBoards([]);
+                setCountdown(3);
+                setFinalScores([]);
+                setDeck([]);
+            }, []);
 
             // 숫자 주머니 생성 (1~10: 1개씩, 11~19: 2개씩, 20~30: 1개씩, 조커: 1개)
-            const createDeck = () => {
-                let deck = [];
-                for (let i = 1; i <= 10; i++) deck.push(i);
-                for (let i = 11; i <= 19; i++) { deck.push(i); deck.push(i); }
-                for (let i = 20; i <= 30; i++) deck.push(i);
-                deck.push("★"); // 조커
-                return deck.sort(() => Math.random() - 0.5);
-            };
+            const createDeck = useCallback(() => {
+                let newDeck = [];
+                for (let i = 1; i <= 10; i++) newDeck.push(i);
+                for (let i = 11; i <= 19; i++) { newDeck.push(i); newDeck.push(i); }
+                for (let i = 20; i <= 30; i++) newDeck.push(i);
+                newDeck.push("★"); // 조커
+                return newDeck.sort(() => Math.random() - 0.5);
+            }, []);
 
-            const [deck, setDeck] = useState([]);
-
-            // 초기화
+            // 게임 시작 초기화
             const initGame = (players, turns) => {
+                resetGameStates(); // 이전 게임 데이터 완전 초기화
                 setPlayerCount(players);
                 setMaxTurns(turns);
                 setBoards(Array(players).fill(null).map(() => Array(turns).fill(null)));
                 setDeck(createDeck());
                 setGameState('READY');
-                setCountdown(3);
             };
 
             // 카운트다운 로직
@@ -139,46 +161,61 @@
                         const timer = setTimeout(() => setCountdown(countdown - 1), 1000);
                         return () => clearTimeout(timer);
                     } else {
+                        // 카운트다운 완료 후 게임 상태 전환 및 첫 숫자 뽑기
                         setGameState('PLAYING');
-                        drawNumber();
+                        // setTimeout을 사용하여 상태 전환이 확실히 반영된 후 숫자를 뽑도록 함
+                        setTimeout(() => {
+                            setCurrentTurn(1);
+                        }, 50);
                     }
                 }
             }, [gameState, countdown]);
 
-            // 숫자 뽑기
-            const drawNumber = () => {
-                if (currentTurn >= maxTurns) {
+            // 현재 턴이 변경될 때마다 새로운 숫자를 뽑는 효과
+            useEffect(() => {
+                if (gameState === 'PLAYING' && currentTurn > 0 && currentTurn <= maxTurns) {
+                    drawNumber();
+                } else if (gameState === 'PLAYING' && currentTurn > maxTurns) {
+                    // 모든 턴이 끝나면 결과 화면으로
                     calculateFinalScore();
-                    return;
                 }
-                const newDeck = [...deck];
-                const num = newDeck.pop();
-                setDeck(newDeck);
-                setCurrentNumber(num);
-                setDrawnNumbers(prev => [...prev, num]);
-                setCurrentTurn(prev => prev + 1);
+            }, [currentTurn, gameState, maxTurns]);
+
+            // 숫자 뽑기 함수
+            const drawNumber = () => {
+                setDeck(prevDeck => {
+                    if (prevDeck.length === 0) return prevDeck;
+                    const newDeck = [...prevDeck];
+                    const num = newDeck.pop();
+                    setCurrentNumber(num);
+                    setDrawnNumbers(prev => [...prev, num]);
+                    return newDeck;
+                });
             };
 
-            // 숫자 배치
+            // 숫자 배치 함수
             const placeNumber = (pIdx, sIdx) => {
                 if (boards[pIdx][sIdx] !== null) return;
                 
-                const newBoards = [...boards];
-                newBoards[pIdx][sIdx] = currentNumber;
-                setBoards(newBoards);
+                setBoards(prevBoards => {
+                    const newBoards = [...prevBoards];
+                    newBoards[pIdx] = [...newBoards[pIdx]];
+                    newBoards[pIdx][sIdx] = currentNumber;
+                    
+                    // 모든 플레이어가 현재 턴의 숫자를 배치했는지 확인
+                    const allPlaced = newBoards.every(board => 
+                        board.filter(val => val !== null).length === currentTurn
+                    );
 
-                // 모든 플레이어가 현재 턴의 숫자를 배치했는지 확인
-                const allPlaced = newBoards.every(board => 
-                    board.filter(val => val !== null).length === currentTurn
-                );
-
-                if (allPlaced) {
-                    if (currentTurn < maxTurns) {
-                        drawNumber();
-                    } else {
-                        calculateFinalScore();
+                    if (allPlaced) {
+                        // 약간의 지연을 주어 배치된 숫자를 확인할 시간을 줌
+                        setTimeout(() => {
+                            setCurrentTurn(prev => prev + 1);
+                        }, 300);
                     }
-                }
+                    
+                    return newBoards;
+                });
             };
 
             // 점수 계산 로직
@@ -187,12 +224,11 @@
                 let currentStream = 1;
                 
                 for (let i = 0; i < board.length - 1; i++) {
-                    const curr = board[i] === "★" ? -1 : board[i];
-                    const next = board[i+1] === "★" ? 99 : board[i+1];
+                    const curr = board[i];
+                    const next = board[i+1];
 
-                    // 조커는 무조건 흐름을 이어가므로 논리적 처리 필요하나 
-                    // 간단히 앞뒤 관계를 숫자로 치환하여 체크
-                    if (board[i+1] === "★" || board[i] === "★" || board[i] <= board[i+1]) {
+                    // 조커(★) 또는 오름차순(같거나 큰 경우) 연결 확인
+                    if (curr === "★" || next === "★" || curr <= next) {
                         currentStream++;
                     } else {
                         totalScore += SCORE_TABLE[currentStream] || 0;
@@ -205,24 +241,64 @@
 
             const calculateFinalScore = () => {
                 const scores = boards.map(b => calculateScore(b));
-                setWinner(scores);
+                setFinalScores(scores);
                 setGameState('RESULT');
             };
 
-            // 홈으로
-            const goHome = () => setGameState('HOME');
+            // 홈으로 이동
+            const goHome = () => {
+                resetGameStates();
+                setGameState('HOME');
+            };
+
+            // --- 컴포넌트: 게임 방법 팝업 ---
+            const HowToPopup = () => (
+                <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[300] flex items-center justify-center p-6 animate__animated animate__fadeIn">
+                    <div className="neu-card max-w-2xl w-full p-8 relative animate__animated animate__zoomIn bg-[#e0e5ec]">
+                        <button onClick={() => setShowHowToPopup(false)} className="absolute top-4 right-4 w-10 h-10 neu-btn flex items-center justify-center text-xl font-bold text-gray-500">×</button>
+                        <h2 className="text-3xl font-extrabold mb-6 text-blue-600 flex items-center gap-2">📜 게임 방법 안내</h2>
+                        <div className="space-y-4 text-gray-700 h-[60vh] overflow-y-auto pr-4 no-scrollbar">
+                            <div className="neu-inset p-5 rounded-xl bg-white/50">
+                                <p className="font-bold text-lg mb-2 text-gray-800">🎮 게임 개요</p>
+                                <ul className="list-disc list-inside space-y-1 text-sm">
+                                    <li>1명부터 최대 4명까지 동시 진행 가능. (원작은 200명까지)</li>
+                                    <li>숫자 타일(1~30 및 조커 별)을 뽑아 보드에 배치.</li>
+                                </ul>
+                            </div>
+                            <div className="neu-inset p-5 rounded-xl bg-white/50">
+                                <p className="font-bold text-lg mb-2 text-gray-800">🧱 핵심 규칙</p>
+                                <ol className="list-decimal list-inside space-y-2 text-sm">
+                                    <li><span className="font-bold text-blue-600">숫자 배치:</span> 화면에 나타난 숫자를 내 보드의 빈칸 중 한 곳에 즉시 적습니다. 한 번 적은 숫자는 수정하거나 옮길 수 없습니다.</li>
+                                    <li><span className="font-bold text-blue-600">오름차순 연결:</span> 숫자가 커지는 방향으로 길게 연결될수록 높은 점수를 받습니다. 같은 숫자가 연달아 나와도 오름차순으로 인정됩니다.</li>
+                                    <li><span className="font-bold text-blue-600">조커 활용:</span> '★'(별) 타일은 원하는 어떤 숫자로도 사용할 수 있어 끊긴 흐름을 잇는 데 유용합니다.</li>
+                                </ol>
+                            </div>
+                            <div className="neu-inset p-5 rounded-xl bg-white/50">
+                                <p className="font-bold text-lg mb-2 text-gray-800">🏆 점수 계산 및 승리</p>
+                                <ul className="list-disc list-inside space-y-1 text-sm">
+                                    <li>숫자가 작아지는 지점에서 흐름이 끊깁니다. 각 연결된 길이(마디)에 해당하는 점수를 합산합니다.</li>
+                                    <li>20칸을 모두 오름차순으로 채우면 <span className="font-bold text-orange-500">최대 300점</span>을 얻을 수 있습니다.</li>
+                                    <li>가장 높은 총점을 기록한 사람이 승리합니다.</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <button onClick={() => setShowHowToPopup(false)} className="w-full mt-6 py-4 bg-blue-500 text-white rounded-xl text-xl font-bold shadow-lg hover:bg-blue-600">확인 완료!</button>
+                    </div>
+                </div>
+            );
 
             // --- 컴포넌트: 홈 화면 ---
             if (gameState === 'HOME') {
                 return (
                     <div className="h-screen flex flex-col items-center justify-center p-6 animate__animated animate__fadeIn">
+                        {showHowToPopup && <HowToPopup />}
                         <div className="neu-card p-10 text-center max-w-2xl w-full">
                             <h1 className="text-5xl font-extrabold mb-4 text-blue-600">에듀 스트림스</h1>
                             <p className="text-gray-600 mb-8">숫자를 오름차순으로 배치하여 가장 긴 줄을 만드세요!</p>
                             
                             <div className="grid grid-cols-1 gap-6 mb-10">
                                 <div className="space-y-3">
-                                    <p className="font-bold text-lg">인원 선택</p>
+                                    <p className="font-bold text-lg">인원 선택 (전자칠판용)</p>
                                     <div className="flex justify-center gap-4">
                                         {[1, 2, 3, 4].map(n => (
                                             <button key={n} onClick={() => setPlayerCount(n)}
@@ -234,7 +310,7 @@
                                 </div>
                                 
                                 <div className="space-y-3">
-                                    <p className="font-bold text-lg">문제 수 (난이도)</p>
+                                    <p className="font-bold text-lg">칸 수 (문제 수)</p>
                                     <div className="flex justify-center gap-4">
                                         {[10, 20].map(n => (
                                             <button key={n} onClick={() => setMaxTurns(n)}
@@ -246,10 +322,16 @@
                                 </div>
                             </div>
 
-                            <button onClick={() => initGame(playerCount, maxTurns)}
-                                className="w-full py-5 bg-blue-500 text-white rounded-2xl text-2xl font-black shadow-lg hover:bg-blue-600 transition-all">
-                                게임 시작하기
-                            </button>
+                            <div className="flex gap-4">
+                                <button onClick={() => setShowHowToPopup(true)}
+                                    className="w-1/3 py-5 neu-btn text-xl font-bold text-gray-600">
+                                    📜 게임 방법
+                                </button>
+                                <button onClick={() => initGame(playerCount, maxTurns)}
+                                    className="w-2/3 py-5 bg-blue-500 text-white rounded-2xl text-2xl font-black shadow-lg hover:bg-blue-600 transition-all">
+                                    게임 시작하기
+                                </button>
+                            </div>
                         </div>
                     </div>
                 );
@@ -276,7 +358,7 @@
                                 <p className="text-sm text-gray-500 font-bold">TURN</p>
                                 <p className="text-2xl font-black">{currentTurn} / {maxTurns}</p>
                             </div>
-                            <div className="w-24 h-24 neu-inset rounded-full flex items-center justify-center bg-gradient-to-br from-blue-400 to-blue-600 shadow-inner">
+                            <div className={`w-24 h-24 neu-inset rounded-full flex items-center justify-center ${currentNumber === '★' ? 'joker-tile' : 'bg-gradient-to-br from-blue-400 to-blue-600'} shadow-inner`}>
                                 <span className="text-4xl text-white font-black">{currentNumber}</span>
                             </div>
                             <div className="text-left">
@@ -286,10 +368,10 @@
                         </div>
                     </div>
 
-                    {/* 플레이어 보드 영역 */}
+                    {/* 플레이어 보드 영역 (반응형 그리드) */}
                     <div className={`h-4/5 grid ${playerCount > 2 ? 'grid-cols-2' : 'grid-cols-1'} gap-4 p-4 pb-20`}>
                         {boards.map((board, pIdx) => (
-                            <div key={pIdx} className="neu-card p-4 flex flex-col relative overflow-hidden">
+                            <div key={pIdx} className="neu-card p-4 flex flex-col relative overflow-hidden animate__animated animate__fadeInUp">
                                 <div className="flex justify-between items-center mb-2">
                                     <span className="font-bold text-blue-500">Player {pIdx + 1}</span>
                                     <span className="text-xs text-gray-400">오름차순 연결 시 점수 UP!</span>
@@ -299,35 +381,36 @@
                                         <div 
                                             key={sIdx}
                                             onClick={() => placeNumber(pIdx, sIdx)}
-                                            className={`neu-btn stream-slot animate__animated ${cell ? 'neu-inset text-blue-600 animate__pulse' : 'hover:bg-blue-50'}`}
+                                            className={`neu-btn stream-slot animate__animated ${cell ? (cell === '★' ? 'joker-tile neu-inset animate__pulse' : 'neu-inset text-blue-600 animate__pulse') : 'hover:bg-blue-50'}`}
                                         >
                                             {cell}
                                         </div>
                                     ))}
                                 </div>
-                                {board.filter(v => v !== null).length === currentTurn && (
-                                    <div className="absolute inset-0 bg-white/40 flex items-center justify-center backdrop-blur-[1px]">
-                                        <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg">대기 중...</span>
+                                {/* 배치 대기 상태 표시 */}
+                                {gameState === 'PLAYING' && board.filter(v => v !== null).length === currentTurn && (
+                                    <div className="absolute inset-0 bg-white/60 flex items-center justify-center backdrop-blur-[1px]">
+                                        <span className="bg-green-500 text-white px-4 py-1 rounded-full text-sm font-bold shadow-lg animate__animated animate__flash animate__infinite">대기 중...</span>
                                     </div>
                                 )}
                             </div>
                         ))}
                     </div>
 
-                    {/* 결과 레이어 */}
+                    {/* 결과 레이어 (사진 2 디자인 적용) */}
                     {gameState === 'RESULT' && (
                         <div className="fixed inset-0 bg-black/60 backdrop-blur-md z-[200] flex items-center justify-center p-6">
-                            <div className="neu-card max-w-xl w-full p-8 text-center animate__animated animate__jackInTheBox bg-white">
-                                <h2 className="text-4xl font-black mb-6 text-blue-600">게임 종료!</h2>
-                                <div className="space-y-4 mb-8">
-                                    {winner.map((score, idx) => (
-                                        <div key={idx} className="flex justify-between items-center p-4 neu-inset rounded-xl">
-                                            <span className="text-xl font-bold">플레이어 {idx + 1}</span>
-                                            <span className="text-3xl font-black text-blue-600">{score}점</span>
+                            <div className="neu-card max-w-xl w-full p-8 text-center animate__animated animate__jackInTheBox bg-white shadow-2xl">
+                                <h2 className="text-4xl font-black mb-8 text-blue-600">게임 종료!</h2>
+                                <div className="space-y-4 mb-10 max-h-[50vh] overflow-y-auto pr-2 no-scrollbar">
+                                    {finalScores.map((score, idx) => (
+                                        <div key={idx} className="flex justify-between items-center p-5 neu-inset rounded-xl bg-gray-50">
+                                            <span className="text-xl font-bold text-gray-700">플레이어 {idx + 1}</span>
+                                            <span className="text-4xl font-black text-blue-600">{score}점</span>
                                         </div>
                                     ))}
                                 </div>
-                                <button onClick={goHome} className="w-full py-4 bg-blue-500 text-white rounded-xl text-xl font-bold">
+                                <button onClick={goHome} className="w-full py-5 bg-blue-500 text-white rounded-2xl text-2xl font-bold shadow-lg hover:bg-blue-600 transition-colors">
                                     다시 하기
                                 </button>
                             </div>
@@ -336,8 +419,7 @@
 
                     {/* 플로팅 컨트롤 */}
                     <div className="floating-controls">
-                        <button onClick={goHome} className="w-12 h-12 neu-btn flex items-center justify-center text-xl" title="홈으로">🏠</button>
-                        <button onClick={() => window.location.reload()} className="w-12 h-12 neu-btn flex items-center justify-center text-xl" title="새로고침">🔄</button>
+                        <button onClick={goHome} className="w-14 h-14 neu-btn flex items-center justify-center text-2xl" title="홈으로">🏠</button>
                     </div>
                 </div>
             );
